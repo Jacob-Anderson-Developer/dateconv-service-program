@@ -1,3 +1,97 @@
+# DATECONV Service Program Example
+
+This project demonstrates how to create and consume a service program on IBM i using SQL RPGLE.
+
+The service program contains six exported procedures used to convert dates between YMD, MDY, and DMY formats. Conversion results are logged to an SQL table for demonstration purposes.
+
+---
+
+# Build Order
+
+## 1. Create the DATE_CONVERSIONS Table
+
+```sql
+CREATE TABLE YOURLIB.DATE_CONVERSIONS
+(
+  Conversion_Type CHAR(10) NOT NULL,
+  Date_In         CHAR(10) NOT NULL,
+  Date_Out        CHAR(10) NOT NULL,
+  Created_Ts      TIMESTAMP NOT NULL
+                  DEFAULT CURRENT TIMESTAMP
+);
+```
+
+## 2. Create Source Member DATECONV.SQLRPGLE
+
+Create the SQL RPGLE source member containing the exported date conversion procedures and internal logging procedure.
+
+## 3. Compile DATECONV.SQLRPGLE into a Module
+
+```cl
+CRTSQLRPGI OBJ(YOURLIB/DATECONV)
+   SRCFILE(YOURLIB/QRPGSQLSRC)
+   SRCMBR(DATECONV)
+   OBJTYPE(*MODULE)
+   COMMIT(*NONE)
+   CLOSQLCSR(*ENDMOD)
+```
+
+## 4. Create Source Member DATECONV.BND
+
+Create binder source member `DATECONV` in source file `QSRVSRC`.
+
+The binder source defines which procedures are exported by the service program.
+
+## 5. Create the Service Program
+
+```cl
+CRTSRVPGM SRVPGM(YOURLIB/DATECONV)
+   MODULE(YOURLIB/DATECONV)
+   SRCFILE(YOURLIB/QSRVSRC)
+   SRCMBR(DATECONV)
+```
+
+## 6. Create the Binding Directory
+
+```cl
+CRTBNDDIR BNDDIR(YOURLIB/DATECONV)
+```
+
+## 7. Add the Service Program to the Binding Directory
+
+```cl
+ADDBNDDIRE BNDDIR(YOURLIB/DATECONV)
+   OBJ((YOURLIB/DATECONV *SRVPGM))
+```
+
+## 8. Create Source Member TESTDCONV.RPGLE
+
+Create the consumer program used to test the DATECONV service program.
+
+## 9. Compile the Test Program
+
+```cl
+CRTBNDRPG PGM(YOURLIB/TESTDCONV)
+   SRCFILE(YOURLIB/QRPGLESRC)
+   SRCMBR(TESTDCONV)
+```
+
+## 10. Run the Test Program
+
+```cl
+CALL YOURLIB/TESTDCONV
+```
+
+## 11. Verify the Results
+
+```sql
+SELECT *
+  FROM YOURLIB.DATE_CONVERSIONS
+ ORDER BY CREATED_TS DESC;
+```
+
+---
+
 # Source Members
 
 ## DATECONV.SQLRPGLE
@@ -95,7 +189,7 @@ CRTSRVPGM SRVPGM(YOURLIB/DATECONV)
 
 ## DATECONV (*BNDDIR)
 
-Binding directory used to locate the DATECONV service program during program creation.
+Binding directory used by the binder during program creation to locate the DATECONV service program.
 
 ### Created Using
 
@@ -165,14 +259,44 @@ DATECONV *SRVPGM
         │
         ▼
 DATECONV *BNDDIR
+        ▲
         │
-        ▼
 TESTDCONV.RPGLE
         │
         ▼
 TESTDCONV *PGM
 
 DATECONV *SRVPGM
+        │
+        ▼
+DATE_CONVERSIONS (*FILE)
+```
+
+### Compile-Time Binding Flow
+
+```text
+TESTDCONV.RPGLE
+        │
+        ▼
+DATECONV *BNDDIR
+        │
+        ▼
+DATECONV *SRVPGM
+        │
+        ▼
+TESTDCONV *PGM
+```
+
+### Runtime Execution Flow
+
+```text
+TESTDCONV *PGM
+        │
+        ▼
+DATECONV *SRVPGM
+        │
+        ▼
+Log_Conversion()
         │
         ▼
 DATE_CONVERSIONS (*FILE)
